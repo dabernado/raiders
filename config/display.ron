@@ -1,0 +1,4 @@
+(
+  title: "raiders",
+  dimensions: Some((500, 500)),
+)
