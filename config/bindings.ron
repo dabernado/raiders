@@ -1,0 +1,13 @@
+(
+  axes: {
+    "forward_back": Emulated(pos: Key(Up), neg: Key(Down)),
+    "left_right": Emulated(pos: Key(Left), neg: Key(Right)),
+    "mouse_x": Mouse(axis: X, over_extendable: true, radius: 100),
+    "mouse_y": Mouse(axis: Y, over_extendable: true, radius: 100),
+  },
+  actions: {
+    "nav_up": [ [Key(W)] ],
+    "nav_down": [ [Key(S)] ],
+    "nav_select": [ [Key(Return)] ],
+  },
+)
