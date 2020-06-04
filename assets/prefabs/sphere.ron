@@ -1,0 +1,33 @@
+#![enable(implicit_some)]
+
+Prefab (
+    entities: [
+        (
+            data: (
+                graphics: (
+                    mesh: Shape((shape: Sphere(32, 32))),
+                    material: (
+                        albedo: Generate(Srgba(0.0, 0.0, 1.0, 1.0)),
+                    ),
+                ),
+                transform: (),
+            ),
+        ),
+        (
+            data: (
+                transform: (
+                    translation: (2.0, 2.0, -2.0),
+                    rotation: (0.0, 1.0, 0.0, 0.0),
+                ),
+                light: (
+                    ambient_color: (Srgba(0.01, 0.01, 0.01, 1.0)),
+                    light: Point((
+                        intensity: 3.0,
+                        color: (1.0, 1.0, 1.0),
+                        radius: 5.0,
+                    )),
+                ),
+            ),
+        ),
+    ],
+)
