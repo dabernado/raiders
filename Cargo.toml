@@ -7,6 +7,11 @@ edition = "2018"
 [dependencies]
 amethyst = "0.15.0"
 log = "0.4.8"
+terr = { git = "https://github.com/dhardy/terr" }
+ncollide3d = "0.20"
+rand = "0.7.3"
+rand_distr = "0.2.2"
+nalgebra = "0.21.0"
 
 [features]
 default = ["vulkan"]
