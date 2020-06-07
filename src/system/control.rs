@@ -2,7 +2,6 @@ use crate::state::{
     PlayerEntity,
 };
 use amethyst::{
-    shrev::*,
     ecs::*,
     core::{
         transform::components::Transform,
