@@ -1,9 +1,14 @@
-/*use amethyst::{
-    prelude::*,
-    assets::Handle,
-};*/
+use amethyst::{
+    renderer::rendy::{
+        mesh::*,
+        util::vulkan::Backend,
+        command::{Families, QueueType},
+        factory::{Factory},
+    },
+};
 use ncollide3d::procedural::TriMesh;
 //use nalgebra::*;
+use log::info;
 use rand::prelude::*;
 use rand_distr::*;
 use terr::{
@@ -17,6 +22,17 @@ pub enum Terrain {
     Foothills,
     Coast,
     Fault,
+}
+
+impl Distribution<Terrain> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Terrain {
+        match rng.gen_range(0, 4) {
+            0 => Terrain::Mountains,
+            1 => Terrain::Foothills,
+            2 => Terrain::Coast,
+            _ => Terrain::Fault,
+        }
+    }
 }
 
 pub struct MapGenerator {
@@ -48,6 +64,7 @@ impl MapGenerator {
                     p.y = temp;
                 }
                 quad.recompute_normals();
+                info!("Terrain generation finished");
 
                 MapGenerator {
                     map_type: map_type,
@@ -86,6 +103,7 @@ impl MapGenerator {
                     p.y = temp;
                 }
                 quad.recompute_normals();
+                info!("Terrain generation finished");
 
                 MapGenerator {
                     map_type: map_type,
@@ -122,6 +140,7 @@ impl MapGenerator {
                     p.y = temp;
                 }
                 quad.recompute_normals();
+                info!("Terrain generation finished");
 
                 MapGenerator {
                     map_type: map_type,
@@ -138,24 +157,20 @@ impl MapGenerator {
                 let mut rng = rand::thread_rng();
                 for (x, y) in [(0, 0), (0, cells-1), (cells-1, 0), (cells-1, cells-1)].iter() {
                     let h = distr.sample(&mut rng) as f32;
-                    println!("Height[{},{}] = {}", *x, *y, h);
                     heightmap.set(*x, *y, h);
                 }
 
                 // Perform random midpoint displacement with randomised scale.
                 let scale = LogNormal::new(-2.5, 0.5).unwrap().sample(&mut rng) as f32;
-                println!("Scale = {}", scale);
                 // Note: Normal(0, scale) is possibly better, but not yet available for f32.
                 let distr = Uniform::new(-scale, scale);
                 diamond_square(&mut heightmap, 0, &mut rng, distr).unwrap();
 
                 let n_faults = rng.sample(LogNormal::new(1.5, 0.5).unwrap()) as usize;
-                println!("Num faults = {}", n_faults);
                 let r_dist = LogNormal::new(2.0, 1.0).unwrap();
                 for _ in 0..n_faults {
                     let r = rng.sample(r_dist) as f32;
                     let h = 0.1 * r;
-                    println!("Fault width = {}, height = {}", r, h);
                     fault_displacement(&mut heightmap, &mut rng, (0.0, r), |d| {
                         if d >= 0.0 && d < r {
                             h * (1.0 - (d / r).powi(2)).powi(2)
@@ -175,6 +190,7 @@ impl MapGenerator {
                     p.y = temp;
                 }
                 quad.recompute_normals();
+                info!("Terrain generation finished");
 
                 MapGenerator {
                     map_type: map_type,
@@ -184,6 +200,32 @@ impl MapGenerator {
         }
     }
 
+    pub fn build_mesh(&self, factory: &Factory<Backend>, families: Families<Backend>) -> Mesh<Backend> {
+        let builder = MeshBuilder::new();
+        let queue_id = families
+            .as_slice()
+            .iter()
+            .find(|family| family.capability() == QueueType::General)
+            .expect("[ERROR][raiders::gen] Could not find queue family of type 'Graphics'")
+            .queue(0)
+            .id();
+
+        let verts: Vec<Position> = self.mesh.coords
+            .clone()
+            .into_iter()
+            .map(|point| {
+                let slice: [f32; 3] = point.coords.into();
+                let position: Position = slice.into();
+
+                position
+            })
+            .collect();
+
+        builder
+            .with_vertices(verts)
+            .build(queue_id, factory)
+            .unwrap()
+    }
+
     pub fn map_type(&self) -> Terrain { self.map_type }
-    pub fn terrain_mesh(&self) -> &TriMesh<f32> { &self.mesh }
 }

@@ -3,11 +3,16 @@ use amethyst::{
     ecs::world::*,
     renderer::{
 	rendy::mesh::{Normal, Position, TexCoord},
+        rendy::factory::{Config, BasicDevicesConfigure, BasicHeapsConfigure, OneGraphicsQueue, init},
     },
     assets::{PrefabLoader, RonFormat},
     utils::scene::BasicScenePrefab,
     ui::{UiCreator, UiFinder, UiEvent, UiEventType},
 };
+use crate::{
+    gen::*,
+};
+use rand::random;
 use log::info;
 
 const BUTTON_START: &str = "start";
@@ -106,6 +111,17 @@ impl SimpleState for LoadingState {
         world.exec(|mut creator: UiCreator<'_>| {
             creator.create("ui/loading.ron", ());
         });
+
+        let map_type: Terrain = random();
+        let gen = MapGenerator::new(map_type);
+        
+        let (factory, families) = init(Config {
+            devices: BasicDevicesConfigure,
+            heaps: BasicHeapsConfigure,
+            queues: OneGraphicsQueue,
+        }).unwrap();
+        let _mesh = gen.build_mesh(&factory, families);
+        info!("Finished building mesh")
     }
 
     fn handle_event(
