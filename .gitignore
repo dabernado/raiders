@@ -1,6 +1,8 @@
 # Unwanted files
 target
 assets/models/blend
+colors.txt
+settings.cap
 
 # Backup files
 .DS_Store
