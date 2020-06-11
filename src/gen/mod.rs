@@ -1,16 +1,13 @@
 use amethyst::{
     renderer::rendy::{
         mesh::*,
-        util::vulkan::Backend,
-        command::{Families, QueueType},
-        factory::{Factory},
+        hal::Primitive,
     },
 };
 use ncollide3d::procedural::TriMesh;
-//use nalgebra::*;
 use log::info;
 use rand::prelude::*;
-use rand_distr::*;
+use rand_distr::{Standard, LogNormal, Uniform, UnitCircle, Exp1, Float};
 use terr::{
     heightmap::{Heightmap, Voronoi, diamond_square, fault_displacement},
     unbounded::Perlin,
@@ -200,31 +197,56 @@ impl MapGenerator {
         }
     }
 
-    pub fn build_mesh(&self, factory: &Factory<Backend>, families: Families<Backend>) -> Mesh<Backend> {
-        let builder = MeshBuilder::new();
-        let queue_id = families
-            .as_slice()
-            .iter()
-            .find(|family| family.capability() == QueueType::General)
-            .expect("[ERROR][raiders::gen] Could not find queue family of type 'Graphics'")
-            .queue(0)
-            .id();
-
-        let verts: Vec<Position> = self.mesh.coords
+    pub fn build_mesh(&self) -> MeshBuilder<'static> {
+        let coords: Vec<PosNorm> = self.mesh.coords
             .clone()
             .into_iter()
             .map(|point| {
                 let slice: [f32; 3] = point.coords.into();
                 let position: Position = slice.into();
+                let normal: Normal = slice.into();
 
-                position
+                PosNorm { position, normal }
             })
             .collect();
 
-        builder
-            .with_vertices(verts)
-            .build(queue_id, factory)
-            .unwrap()
+        let uvs: Vec<TexCoord> = self.mesh.uvs
+            .clone()
+            .expect("[ERROR][raiders::gen] UV vector not found")
+            .into_iter()
+            .map(|point| {
+                let slice: [f32; 2] = point.coords.into();
+                let uv: TexCoord = slice.into();
+
+                uv
+            })
+            .collect();
+
+        let verts: Vec<PosNormTex> = coords.into_iter()
+            .zip(uvs.into_iter())
+            .map(|(posnorm, tex_coord)| {
+                let PosNorm { position, normal } = posnorm;
+
+                PosNormTex { position, normal, tex_coord }
+            })
+            .collect();
+
+        let mut indices: Vec<u32> = vec![];
+        self.mesh.indices
+            .clone()
+            .unwrap_unified()
+            .into_iter()
+            .for_each(|point| {
+                let slice: [u32; 3] = point.coords.into();
+
+                for x in slice.iter() {
+                    indices.push(x.clone());
+                }
+            });
+
+        MeshBuilder::from(verts)
+            .with_indices(indices)
+            .with_prim_type(Primitive::TriangleList)
     }
 
     pub fn map_type(&self) -> Terrain { self.map_type }

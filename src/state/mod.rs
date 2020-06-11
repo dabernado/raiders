@@ -1,13 +1,21 @@
 use amethyst::{
     prelude::*,
+    assets::AssetLoaderSystemData,
     ecs::world::*,
     renderer::{
-	rendy::mesh::{Normal, Position, TexCoord},
-        rendy::factory::{Config, BasicDevicesConfigure, BasicHeapsConfigure, OneGraphicsQueue, init},
+	rendy::{
+            mesh::{Normal, Position, TexCoord},
+            texture::palette::load_from_srgba,
+        },
+        palette::{Srgba},
+        Mesh, Texture,
     },
     assets::{PrefabLoader, RonFormat},
     utils::scene::BasicScenePrefab,
     ui::{UiCreator, UiFinder, UiEvent, UiEventType},
+    core::{
+        transform::Transform,
+    },
 };
 use crate::{
     gen::*,
@@ -19,6 +27,7 @@ const BUTTON_START: &str = "start";
 const BUTTON_LOAD: &str = "load";
 const BUTTON_OPTIONS: &str = "options";
 const BUTTON_CREDITS: &str = "credits";
+const CONTAINER: &str = "container";
 
 pub type ScenePrefabData = BasicScenePrefab<(Vec<Position>, Vec<Normal>, Vec<TexCoord>)>;
 
@@ -29,6 +38,7 @@ pub struct MainMenuState {
     button_load: Option<Entity>,
     button_options: Option<Entity>,
     button_credits: Option<Entity>,
+    container: Option<Entity>,
 }
 
 impl SimpleState for MainMenuState {
@@ -39,14 +49,10 @@ impl SimpleState for MainMenuState {
             creator.create("ui/main_menu.ron", ());
         });
         
-        let sphere_handle = world.exec(|loader: PrefabLoader<'_, ScenePrefabData>| {
-            loader.load("prefabs/sphere.ron", RonFormat, ())
-        });
         let player_handle = world.exec(|loader: PrefabLoader<'_, ScenePrefabData>| {
             loader.load("prefabs/player.ron", RonFormat, ())
         });
         
-        let _sphere = world.create_entity().with(sphere_handle).build();
         let player = world.create_entity().with(player_handle).build();
 
         world.insert(PlayerEntity(player.id()));
@@ -60,12 +66,14 @@ impl SimpleState for MainMenuState {
             || self.button_load.is_none()
             || self.button_options.is_none()
             || self.button_credits.is_none()
+            || self.container.is_none()
         {
             world.exec(|ui_finder: UiFinder<'_>| {
                 self.button_start = ui_finder.find(BUTTON_START);
                 self.button_load = ui_finder.find(BUTTON_LOAD);
                 self.button_options = ui_finder.find(BUTTON_OPTIONS);
                 self.button_credits = ui_finder.find(BUTTON_CREDITS);
+                self.container = ui_finder.find(CONTAINER);
             });
         }
 
@@ -74,9 +82,10 @@ impl SimpleState for MainMenuState {
 
     fn handle_event(
         &mut self,
-        _data: StateData<GameData<'_, '_>>,
+        data: StateData<GameData<'_, '_>>,
         event: StateEvent
         ) -> Trans<GameData<'static, 'static>, StateEvent> {
+        let StateData { world, .. } = data;
         match event {
             StateEvent::Ui(UiEvent {
                 event_type: UiEventType::Click,
@@ -84,6 +93,9 @@ impl SimpleState for MainMenuState {
             }) => {
                 if Some(target) == self.button_start {
                     info!("[Trans::Switch] Switching to LoadingState");
+                    world.delete_entity(self.container.expect("[ERROR][raiders::state] Container not found"))
+                        .unwrap();
+                    
                     return Trans::Switch(Box::new(LoadingState::default()));
                 }
                 if Some(target) == self.button_load || Some(target) == self.button_options || Some(target) == self.button_credits {
@@ -101,27 +113,59 @@ impl SimpleState for MainMenuState {
 
 /* Loading State */
 #[derive(Default, Debug)]
-pub struct LoadingState;
+pub struct LoadingState {
+    screen_loading: Option<Entity>,
+    finished: bool,
+}
 
 impl SimpleState for LoadingState {
     fn on_start(&mut self, data: StateData<'_, GameData<'_, '_>>) {
         let StateData { world, .. } = data;
-        world.delete_all();
-
-        world.exec(|mut creator: UiCreator<'_>| {
-            creator.create("ui/loading.ron", ());
-        });
-
+        
+        world.exec(|mut creator: UiCreator<'_>| creator.create("ui/loading.ron", ()) );
+        
         let map_type: Terrain = random();
         let gen = MapGenerator::new(map_type);
+
+        let mtl = world.exec(|loader: AssetLoaderSystemData<'_, Texture>| {
+            loader.load_from_data(
+                load_from_srgba(Srgba::new(0.0, 0.0, 1.0, 1.0)).into(),
+                (),
+                )
+        });
+
+        let mesh = world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
+            loader.load_from_data(
+                gen.build_mesh()
+                .into(),
+                (),
+                )
+        });
         
-        let (factory, families) = init(Config {
-            devices: BasicDevicesConfigure,
-            heaps: BasicHeapsConfigure,
-            queues: OneGraphicsQueue,
-        }).unwrap();
-        let _mesh = gen.build_mesh(&factory, families);
-        info!("Finished building mesh")
+        let _terrain = world.create_entity()
+            .with(mesh)
+            .with(mtl)
+            .with(Transform::default())
+            .build();
+
+        self.finished = true;
+    }
+
+    fn update(&mut self, data: &mut StateData<'_, GameData<'_, '_>>) -> Trans<GameData<'static, 'static>, StateEvent> {
+        // only search for buttons if they have not been found yet
+        let StateData { world, .. } = data;
+
+        if self.screen_loading.is_none() {
+            world.exec(|ui_finder: UiFinder<'_>| self.screen_loading = ui_finder.find(CONTAINER) );
+        }
+
+        if self.finished && !self.screen_loading.is_none() {
+            world.delete_entity(self.screen_loading.expect("[ERROR][raiders::state] Loading screen not found"))
+                .unwrap();
+            self.screen_loading = None;
+        }
+
+        Trans::None
     }
 
     fn handle_event(
@@ -215,24 +259,3 @@ pub struct PlayerEntity(Index);
 impl PlayerEntity {
     pub fn index(&self) -> Index { return self.0 }
 }
-
-/*#[derive(Default)]
-pub struct CurrentUiElement(Index);
-
-impl CurrentUiElement {
-    pub fn index(&self) -> Index { return self.0 }
-    pub fn update(&mut self, index: Index) { self.0 = index }
-}
-
-pub struct UiIter(Cycle<IntoIter<Entity>>);
-
-impl UiIter {
-    pub fn get_mut(&mut self) -> &mut Cycle<IntoIter<Entity>> { return &mut self.0 }
-}
-
-#[derive(Default)]
-pub struct UiSize(usize);
-
-impl UiSize {
-    pub fn unwrap(&self) -> usize { return self.0 }
-}*/
