@@ -4,7 +4,7 @@ use amethyst::{
     ecs::world::*,
     renderer::{
 	rendy::{
-            mesh::{Normal, Position, TexCoord},
+            mesh::{Normal, Position, TexCoord, MeshBuilder, obj::load_from_obj},
             texture::palette::load_from_srgba,
         },
         palette::{Srgba},
@@ -126,6 +126,7 @@ impl SimpleState for LoadingState {
         
         let map_type: Terrain = random();
         let gen = MapGenerator::new(map_type);
+        gen.build_mesh();
 
         let mtl = world.exec(|loader: AssetLoaderSystemData<'_, Texture>| {
             loader.load_from_data(
@@ -134,16 +135,12 @@ impl SimpleState for LoadingState {
                 )
         });
 
-        let mesh = world.exec(|loader: AssetLoaderSystemData<'_, Mesh>| {
-            loader.load_from_data(
-                gen.build_mesh()
-                .into(),
-                (),
-                )
+        let map_handle = world.exec(|loader: PrefabLoader<'_, ScenePrefabData>| {
+            loader.load(gen.map_path(), RonFormat, ())
         });
         
-        let _terrain = world.create_entity()
-            .with(mesh)
+        let _map = world.create_entity()
+            .with(map_handle)
             .with(mtl)
             .with(Transform::default())
             .build();

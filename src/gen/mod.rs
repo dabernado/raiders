@@ -8,6 +8,7 @@ use ncollide3d::procedural::TriMesh;
 use log::info;
 use rand::prelude::*;
 use rand_distr::{Standard, LogNormal, Uniform, UnitCircle, Exp1, Float};
+use obj_exporter::{Geometry, ObjSet, Object, Primitive as ObjPrimitive, Shape, TVertex, Vertex};
 use terr::{
     heightmap::{Heightmap, Voronoi, diamond_square, fault_displacement},
     unbounded::Perlin,
@@ -35,6 +36,7 @@ impl Distribution<Terrain> for Standard {
 pub struct MapGenerator {
     map_type: Terrain,
     mesh: TriMesh<f32>,
+    path: String,
 }
 
 impl MapGenerator {
@@ -63,9 +65,11 @@ impl MapGenerator {
                 quad.recompute_normals();
                 info!("Terrain generation finished");
 
+                let num: usize = rand::thread_rng().gen();
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
+                    path: format!("assets/prefabs/map-{}.ron", num),
                 }
             },
             
@@ -102,9 +106,11 @@ impl MapGenerator {
                 quad.recompute_normals();
                 info!("Terrain generation finished");
 
+                let num: usize = rand::thread_rng().gen();
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
+                    path: format!("assets/prefabs/map-{}.ron", num),
                 }
             },
             
@@ -139,9 +145,11 @@ impl MapGenerator {
                 quad.recompute_normals();
                 info!("Terrain generation finished");
 
+                let num: usize = rand::thread_rng().gen();
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
+                    path: format!("assets/prefabs/map-{}.ron", num),
                 }
             },
             
@@ -189,15 +197,82 @@ impl MapGenerator {
                 quad.recompute_normals();
                 info!("Terrain generation finished");
 
+                let num: usize = rand::thread_rng().gen();
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
+                    path: format!("assets/prefabs/map-{}.ron", num),
                 }
             },
         }
     }
 
-    pub fn build_mesh(&self) -> MeshBuilder<'static> {
+    // .obj generation
+    pub fn build_mesh(&self) {
+        let num: usize = rand::thread_rng().gen();
+        let rpath = format!("terrain-{}.obj", num);
+        let mesh_object = ObjSet {
+            material_library: None,
+            objects: vec![Object {
+                name: String::from("Terrain"),
+                vertices: self.mesh.coords
+                    .clone()
+                    .into_iter()
+                    .map(|point| {
+                        let slice: [f32; 3] = point.coords.into();
+
+                        Vertex { x: slice[0] as f64, y: slice[1] as f64, z: slice[2] as f64 }
+                    })
+                    .collect(),
+                tex_vertices: self.mesh.uvs
+                    .clone()
+                    .expect("[ERROR][raiders::gen] UV vector not found")
+                    .into_iter()
+                    .map(|point| {
+                        let slice: [f32; 2] = point.coords.into();
+
+                        TVertex { u: slice[0] as f64, v: slice[1] as f64, w: 0.0 }
+                    })
+                    .collect(),
+                normals: self.mesh.normals
+                    .clone()
+                    .expect("[ERROR][raiders::gen] Normals vector not found")
+                    .into_iter()
+                    .map(|vector| {
+                        let slice: [f32; 3] = vector.into();
+
+                        Vertex { x: slice[0] as f64, y: slice[1] as f64, z: slice[2] as f64 }
+                    })
+                    .collect(),
+                geometry: vec![Geometry {
+                    material_name: None,
+                    shapes: self.mesh.indices
+                        .clone()
+                        .unwrap_unified()
+                        .into_iter()
+                        .map(|point| {
+                            let slice: [u32; 3] = point.coords.into();
+
+                            Shape {
+                                primitive: ObjPrimitive::Triangle(
+                                    (slice[0] as usize, Some(slice[0] as usize), Some(0)),
+                                    (slice[1] as usize, Some(slice[1] as usize), Some(0)),
+                                    (slice[2] as usize, Some(slice[2] as usize), Some(0)),
+                                ),
+                                groups: vec![],
+                                smoothing_groups: vec![],
+                            }
+                        })
+                        .collect(),
+                }],
+            }],
+        };
+
+        obj_exporter::export_to_file(&mesh_object, rpath).unwrap();
+    }
+
+    // MeshBuilder constructor (doesn't work)
+    pub fn _build_mesh(&self) -> MeshBuilder<'static> {
         let coords: Vec<PosNorm> = self.mesh.coords
             .clone()
             .into_iter()
@@ -250,4 +325,5 @@ impl MapGenerator {
     }
 
     pub fn map_type(&self) -> Terrain { self.map_type }
+    pub fn map_path(&self) -> &str { self.path.as_str() }
 }
