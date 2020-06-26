@@ -12,9 +12,15 @@ ncollide3d = "0.20"
 rand = "0.7.3"
 rand_distr = "0.2.2"
 nalgebra = "0.21.0"
+obj-exporter = "0.2.0"
+jemallocator = "0.3.2"
 
 [features]
 default = ["vulkan"]
 empty = ["amethyst/empty"]
 metal = ["amethyst/metal"]
 vulkan = ["amethyst/vulkan"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
