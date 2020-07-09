@@ -1,9 +1,5 @@
-use amethyst::{
-    renderer::rendy::{
-        mesh::*,
-        hal::Primitive,
-    },
-};
+use std::fs;
+use std::io::Write;
 use ncollide3d::procedural::TriMesh;
 use log::info;
 use rand::prelude::*;
@@ -36,11 +32,17 @@ impl Distribution<Terrain> for Standard {
 pub struct MapGenerator {
     map_type: Terrain,
     mesh: TriMesh<f32>,
+    handle: fs::File,
     path: String,
 }
 
 impl MapGenerator {
     pub fn new(map_type: Terrain) -> Self {
+    	let num: usize = rand::thread_rng().gen();
+    	let path = format!("prefabs/map-{}.ron", num);
+    	let mut file = fs::File::create(format!("assets/{}", &path)).unwrap();
+    	file.write_all(b"#![enable(implicit_some)] Prefab ( entities: [").unwrap();
+    	
         match map_type {
             Terrain::Mountains => {
                 let cells = 2_u32.pow(5) + 1;
@@ -65,11 +67,11 @@ impl MapGenerator {
                 quad.recompute_normals();
                 info!("Terrain generation finished");
 
-                let num: usize = rand::thread_rng().gen();
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
-                    path: format!("assets/prefabs/map-{}.ron", num),
+                    handle: file,
+                    path: path,
                 }
             },
             
@@ -105,12 +107,12 @@ impl MapGenerator {
                 }
                 quad.recompute_normals();
                 info!("Terrain generation finished");
-
-                let num: usize = rand::thread_rng().gen();
+                
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
-                    path: format!("assets/prefabs/map-{}.ron", num),
+                    handle: file,
+                    path: path,
                 }
             },
             
@@ -144,12 +146,12 @@ impl MapGenerator {
                 }
                 quad.recompute_normals();
                 info!("Terrain generation finished");
-
-                let num: usize = rand::thread_rng().gen();
+                
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
-                    path: format!("assets/prefabs/map-{}.ron", num),
+                    handle: file,
+                    path: path,
                 }
             },
             
@@ -196,21 +198,25 @@ impl MapGenerator {
                 }
                 quad.recompute_normals();
                 info!("Terrain generation finished");
-
-                let num: usize = rand::thread_rng().gen();
+                
                 MapGenerator {
                     map_type: map_type,
                     mesh: quad,
-                    path: format!("assets/prefabs/map-{}.ron", num),
+                    handle: file,
+                    path: path,
                 }
             },
         }
     }
+    
+    pub fn map_type(&self) -> Terrain { self.map_type }
+    pub fn map_path(&self) -> &str { self.path.as_str() }
 
     // .obj generation
-    pub fn build_mesh(&self) {
-        let num: usize = rand::thread_rng().gen();
-        let rpath = format!("terrain-{}.obj", num);
+    pub fn build_terrain(&mut self) {
+    	let num: usize = rand::thread_rng().gen();
+    	let rpath = format!("models/terrain-{}.obj", num);
+        
         let mesh_object = ObjSet {
             material_library: None,
             objects: vec![Object {
@@ -268,62 +274,29 @@ impl MapGenerator {
             }],
         };
 
-        obj_exporter::export_to_file(&mesh_object, rpath).unwrap();
+        obj_exporter::export_to_file(&mesh_object, &format!("assets/{}", rpath)).unwrap();
+        self.add_mesh(&rpath, (0.0, 0.0, 0.0), Material::Srgba((0.0, 1.0, 0.0, 1.0)));
     }
-
-    // MeshBuilder constructor (doesn't work)
-    pub fn _build_mesh(&self) -> MeshBuilder<'static> {
-        let coords: Vec<PosNorm> = self.mesh.coords
-            .clone()
-            .into_iter()
-            .map(|point| {
-                let slice: [f32; 3] = point.coords.into();
-                let position: Position = slice.into();
-                let normal: Normal = slice.into();
-
-                PosNorm { position, normal }
-            })
-            .collect();
-
-        let uvs: Vec<TexCoord> = self.mesh.uvs
-            .clone()
-            .expect("[ERROR][raiders::gen] UV vector not found")
-            .into_iter()
-            .map(|point| {
-                let slice: [f32; 2] = point.coords.into();
-                let uv: TexCoord = slice.into();
-
-                uv
-            })
-            .collect();
-
-        let verts: Vec<PosNormTex> = coords.into_iter()
-            .zip(uvs.into_iter())
-            .map(|(posnorm, tex_coord)| {
-                let PosNorm { position, normal } = posnorm;
-
-                PosNormTex { position, normal, tex_coord }
-            })
-            .collect();
-
-        let mut indices: Vec<u32> = vec![];
-        self.mesh.indices
-            .clone()
-            .unwrap_unified()
-            .into_iter()
-            .for_each(|point| {
-                let slice: [u32; 3] = point.coords.into();
-
-                for x in slice.iter() {
-                    indices.push(x.clone());
-                }
-            });
-
-        MeshBuilder::from(verts)
-            .with_indices(indices)
-            .with_prim_type(Primitive::TriangleList)
+    
+    pub fn finish(&mut self) {
+    	self.handle.write_all(b" ], )").unwrap();
     }
+    
+    fn add_mesh(&mut self, path: &String, (x, y, z): (f32, f32, f32), mtl: Material) {
+    	let transform = format!("transform: ( translation: ({}, {}, {}), ),", x, y, z);
+    	let mtl_string = match mtl {
+    		Material::Srgba((r, g, b, a)) => format!("Generate(Srgba({}, {}, {}, {}))", r, g, b, a),
+    		Material::Mtl(_mpath) => String::from("bottom text"),
+    		Material::Image(_mpath) => String::from("bottom text"),
+    	};
+    	let mesh = format!("( data: ( graphics: ( mesh: Asset(File(\"{}\", (\"OBJ\", ()))), material: ( albedo: {}, ), ), {} ), ),", path, mtl_string, transform);
+    	
+    	self.handle.write_all(mesh.as_bytes()).unwrap();
+    }
+}
 
-    pub fn map_type(&self) -> Terrain { self.map_type }
-    pub fn map_path(&self) -> &str { self.path.as_str() }
+enum Material {
+	Srgba((f32, f32, f32, f32)),
+	Mtl(String),
+	Image(String),
 }

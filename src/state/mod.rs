@@ -1,14 +1,10 @@
 use amethyst::{
     prelude::*,
-    assets::AssetLoaderSystemData,
     ecs::world::*,
     renderer::{
 	rendy::{
-            mesh::{Normal, Position, TexCoord, MeshBuilder, obj::load_from_obj},
-            texture::palette::load_from_srgba,
+            mesh::{Normal, Position, TexCoord},
         },
-        palette::{Srgba},
-        Mesh, Texture,
     },
     assets::{PrefabLoader, RonFormat},
     utils::scene::BasicScenePrefab,
@@ -125,15 +121,9 @@ impl SimpleState for LoadingState {
         world.exec(|mut creator: UiCreator<'_>| creator.create("ui/loading.ron", ()) );
         
         let map_type: Terrain = random();
-        let gen = MapGenerator::new(map_type);
-        gen.build_mesh();
-
-        let mtl = world.exec(|loader: AssetLoaderSystemData<'_, Texture>| {
-            loader.load_from_data(
-                load_from_srgba(Srgba::new(0.0, 0.0, 1.0, 1.0)).into(),
-                (),
-                )
-        });
+        let mut gen = MapGenerator::new(map_type);
+        gen.build_terrain();
+        gen.finish();
 
         let map_handle = world.exec(|loader: PrefabLoader<'_, ScenePrefabData>| {
             loader.load(gen.map_path(), RonFormat, ())
@@ -141,7 +131,6 @@ impl SimpleState for LoadingState {
         
         let _map = world.create_entity()
             .with(map_handle)
-            .with(mtl)
             .with(Transform::default())
             .build();
 
